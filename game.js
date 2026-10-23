@@ -279,21 +279,24 @@ const SHIELD_DURATION = 7;   // segundos de escudo (o hasta absorber un golpe)
 const SHIELD_RADIUS   = 24;
 const SLOW_DURATION   = 6;    // segundos de cámara lenta para los asteroides
 const SLOW_FACTOR     = 0.5;  // fracción de velocidad de los asteroides
+const NOVA_CHANCE     = 0.02; // probabilidad (aparte) de drop de Bomba Nova
+const NOVA_FX_DURATION = 0.6; // segundos del anillo/flash de la explosión
 const POWERUP_STYLE   = {
   triple: { color: '#0ff', label: '3' },
   shield: { color: '#4af', label: 'S' },
   slow:   { color: '#c8f', label: 'L' },
+  nova:   { color: '#f80', label: 'N' },
 };
 
 class PowerUp {
-  constructor(x, y) {
+  constructor(x, y, type = ['triple', 'shield', 'slow'][randInt(0, 2)]) {
     this.x = x;
     this.y = y;
     const angle = rand(0, Math.PI * 2);
     this.vx = Math.cos(angle) * 30;
     this.vy = Math.sin(angle) * 30;
     this.radius = 10;
-    this.type = ['triple', 'shield', 'slow'][randInt(0, 2)];
+    this.type = type;
     this.ttl  = 8;
     this.dead = false;
   }
@@ -325,6 +328,8 @@ class PowerUp {
 let ship, bullets, asteroids, particles, powerups;
 let score, lives, level;
 let slowMo;     // segundos restantes de cámara lenta
+let novaBombs;  // Bombas Nova guardadas (0 o 1)
+let novaFx;     // segundos restantes del efecto visual de la Nova
 let state;     // 'playing' | 'dead' | 'gameover'
 let deadTimer;
 let levelKills, guaranteedKill, levelDropped;   // garantiza ≥1 power-up por nivel
@@ -358,6 +363,8 @@ function initGame() {
   lives  = 3;
   level  = 1;
   slowMo = 0;
+  novaBombs = 0;
+  novaFx    = 0;
   state  = 'playing';
   spawnAsteroids(4);
   resetDropTracker(4);
@@ -388,6 +395,19 @@ function destroyAsteroid(a, out) {
     powerups.push(new PowerUp(a.x, a.y));
     levelDropped = true;
   }
+  if (!novaBombs && !powerups.some(p => p.type === 'nova') && Math.random() < NOVA_CHANCE)
+    powerups.push(new PowerUp(a.x, a.y, 'nova'));
+}
+
+// Bomba Nova: desintegra todos los asteroides (sin fragmentos ni drops)
+function detonateNova() {
+  novaBombs = 0;
+  novaFx    = NOVA_FX_DURATION;
+  for (const a of asteroids) {
+    score += POINTS[a.size];
+    explode(a.x, a.y, a.size * 5);
+  }
+  asteroids = [];
 }
 
 function killShip() {
@@ -407,6 +427,8 @@ function killShip() {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
+  if (novaFx > 0) novaFx -= dt;
+
   if (state === 'gameover') {
     if (pressed('Space')) initGame();
     particles.forEach(p => p.update(dt));
@@ -429,6 +451,8 @@ function update(dt) {
   if (pressed('Space')) {
     bullets.push(...ship.tryShoot());
   }
+
+  if (pressed('KeyB') && novaBombs) detonateNova();
 
   if (slowMo > 0) slowMo -= dt;
   const asteroidDt = slowMo > 0 ? dt * SLOW_FACTOR : dt;
@@ -462,6 +486,7 @@ function update(dt) {
       p.dead = true;
       if (p.type === 'shield') ship.shield = SHIELD_DURATION;
       else if (p.type === 'slow') slowMo = SLOW_DURATION;
+      else if (p.type === 'nova') novaBombs = 1;
       else ship.tripleShot = TRIPLE_DURATION;
     }
   }
@@ -527,8 +552,12 @@ function drawHUD() {
     ctx.fillText(`ESCUDO ${Math.ceil(ship.shield)}s`, 14, hudY);
     hudY += 20;
   }
-  if (slowMo > 0)
+  if (slowMo > 0) {
     ctx.fillText(`LENTO ${Math.ceil(slowMo)}s`, 14, hudY);
+    hudY += 20;
+  }
+  if (novaBombs > 0)
+    ctx.fillText('NOVA [B]', 14, hudY);
 
   for (let i = 0; i < lives; i++)
     drawLifeIcon(W - 16 - i * 22, 18);
@@ -554,6 +583,18 @@ function draw() {
   powerups.forEach(p => p.draw());
   bullets.forEach(b => b.draw());
   ship.draw();
+
+  // Efecto Nova: flash blanco + anillo expansivo naranja
+  if (novaFx > 0) {
+    const t = novaFx / NOVA_FX_DURATION;
+    ctx.fillStyle = `rgba(255,255,255,${(t * 0.5).toFixed(2)})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = `rgba(255,136,0,${t.toFixed(2)})`;
+    ctx.lineWidth   = 4;
+    ctx.beginPath();
+    ctx.arc(ship.x, ship.y, (1 - t) * 600, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 
   drawHUD();
 

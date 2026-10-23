@@ -33,6 +33,7 @@ Luego visita `http://localhost:3000`.
 | `←` `→`   | Rotar nave |
 | `↑`       | Propulsar  |
 | `Espacio` | Disparar   |
+| `B`       | Bomba Nova |
 
 ## Puntuación
 
@@ -47,3 +48,4 @@ Luego visita `http://localhost:3000`.
 - 3 vidas con invencibilidad temporal al reaparecer (parpadeo)
 - Asteroides se parten en fragmentos más pequeños al ser destruidos
 - Partículas de explosión al destruir asteroides
+- Bomba Nova (ítem escaso `N`): se guarda al recogerla y con `B` desintegra todos los asteroides en pantalla
