@@ -9,13 +9,7 @@ const H = 600;
 const keys = {};
 const justPressed = {};
 
-window.addEventListener('keydown', e => {
-  justPressed[e.code] = !keys[e.code];
-  keys[e.code] = true;
-  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code))
-    e.preventDefault();
-});
-window.addEventListener('keyup', e => { keys[e.code] = false; });
+
 
 function pressed(code) {
   const val = justPressed[code];
@@ -62,6 +56,16 @@ const RADII  = [0, 16, 30, 50];   // por tamaño 1, 2, 3
 const SPEEDS = [0, 85, 55, 32];   // velocidad base por tamaño
 const POINTS = [0, 100, 50, 20];  // puntos por tamaño
 
+// Variante de asteroide grande con silueta fija (vértices trazados del arte original)
+const SHAPE_CHANCE = 0.3;
+const SHAPE_PTS = [
+  [188, 63], [268, 87], [251, 171], [331, 195], [308, 282],
+  [238, 280], [205, 335], [107, 287], [62, 206], [83, 119],
+];
+const SHAPE_CX = SHAPE_PTS.reduce((t, p) => t + p[0], 0) / SHAPE_PTS.length;
+const SHAPE_CY = SHAPE_PTS.reduce((t, p) => t + p[1], 0) / SHAPE_PTS.length;
+const SHAPE_MAX = Math.max(...SHAPE_PTS.map(p => Math.hypot(p[0] - SHAPE_CX, p[1] - SHAPE_CY)));
+
 class Asteroid {
   constructor(x, y, size = 3) {
     this.x    = x;
@@ -76,11 +80,15 @@ class Asteroid {
     this.vy = Math.sin(angle) * speed;
     this.rotSpeed = rand(-1.2, 1.2);
     this.rot = rand(0, Math.PI * 2);
-
-    // Polígono irregular
+    
+    // Polígono irregular (o la silueta fija en ~30% de los grandes)
     const n = randInt(8, 13);
     this.verts = [];
-    for (let i = 0; i < n; i++) {
+    if (size === 3 && Math.random() < SHAPE_CHANCE) {
+      const k = this.radius / SHAPE_MAX;
+      for (const [px, py] of SHAPE_PTS)
+        this.verts.push([(px - SHAPE_CX) * k, (py - SHAPE_CY) * k]);
+    } else for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       const r = this.radius * rand(0.6, 1.0);
       this.verts.push([Math.cos(a) * r, Math.sin(a) * r]);
