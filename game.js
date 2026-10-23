@@ -119,7 +119,9 @@ class Asteroid {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
-    ctx.strokeStyle = '#fff';
+    // Cámara lenta: asteroides violetas, parpadeo en el último segundo
+    const slowed = slowMo > 0 && (slowMo > 1 || Math.floor(slowMo * 8) % 2 === 1);
+    ctx.strokeStyle = slowed ? '#c8f' : '#fff';
     ctx.lineWidth   = 1.5;
     ctx.lineJoin    = 'round';
     ctx.beginPath();
@@ -275,6 +277,13 @@ const POWERUP_CHANCE  = 0.1;  // probabilidad de drop al destruir un asteroide
 const TRIPLE_DURATION = 7;    // segundos de disparo triple
 const SHIELD_DURATION = 7;   // segundos de escudo (o hasta absorber un golpe)
 const SHIELD_RADIUS   = 24;
+const SLOW_DURATION   = 6;    // segundos de cámara lenta para los asteroides
+const SLOW_FACTOR     = 0.5;  // fracción de velocidad de los asteroides
+const POWERUP_STYLE   = {
+  triple: { color: '#0ff', label: '3' },
+  shield: { color: '#4af', label: 'S' },
+  slow:   { color: '#c8f', label: 'L' },
+};
 
 class PowerUp {
   constructor(x, y) {
@@ -284,7 +293,7 @@ class PowerUp {
     this.vx = Math.cos(angle) * 30;
     this.vy = Math.sin(angle) * 30;
     this.radius = 10;
-    this.type = Math.random() < 0.5 ? 'triple' : 'shield';
+    this.type = ['triple', 'shield', 'slow'][randInt(0, 2)];
     this.ttl  = 8;
     this.dead = false;
   }
@@ -299,7 +308,7 @@ class PowerUp {
   draw() {
     // Parpadeo en los últimos 2s
     if (this.ttl < 2 && Math.floor(this.ttl * 8) % 2 === 0) return;
-    const color = this.type === 'shield' ? '#4af' : '#0ff';
+    const { color, label } = POWERUP_STYLE[this.type];
     ctx.strokeStyle = color;
     ctx.fillStyle   = color;
     ctx.lineWidth   = 1.5;
@@ -308,14 +317,15 @@ class PowerUp {
     ctx.stroke();
     ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(this.type === 'shield' ? 'S' : '3', this.x, this.y + 4.5);
+    ctx.fillText(label, this.x, this.y + 4.5);
   }
 }
 
 // ── Estado del juego ──────────────────────────────────────────────────────────
 let ship, bullets, asteroids, particles, powerups;
 let score, lives, level;
-let state;      // 'playing' | 'dead' | 'gameover'
+let slowMo;     // segundos restantes de cámara lenta
+let state;     // 'playing' | 'dead' | 'gameover'
 let deadTimer;
 let levelKills, guaranteedKill, levelDropped;   // garantiza ≥1 power-up por nivel
 
@@ -347,6 +357,7 @@ function initGame() {
   score  = 0;
   lives  = 3;
   level  = 1;
+  slowMo = 0;
   state  = 'playing';
   spawnAsteroids(4);
   resetDropTracker(4);
@@ -384,6 +395,7 @@ function killShip() {
   ship.dead = true;
   ship.tripleShot = 0;
   ship.shield = 0;
+  slowMo = 0;
   lives--;
   if (lives <= 0) {
     state = 'gameover';
@@ -418,9 +430,12 @@ function update(dt) {
     bullets.push(...ship.tryShoot());
   }
 
+  if (slowMo > 0) slowMo -= dt;
+  const asteroidDt = slowMo > 0 ? dt * SLOW_FACTOR : dt;
+
   ship.update(dt);
   bullets.forEach(b => b.update(dt));
-  asteroids.forEach(a => a.update(dt));
+  asteroids.forEach(a => a.update(asteroidDt));
   particles.forEach(p => p.update(dt));
   powerups.forEach(p => p.update(dt));
 
@@ -446,6 +461,7 @@ function update(dt) {
     if (dist(ship, p) < ship.radius + p.radius) {
       p.dead = true;
       if (p.type === 'shield') ship.shield = SHIELD_DURATION;
+      else if (p.type === 'slow') slowMo = SLOW_DURATION;
       else ship.tripleShot = TRIPLE_DURATION;
     }
   }
@@ -507,8 +523,12 @@ function drawHUD() {
     ctx.fillText(`TRIPLE ${Math.ceil(ship.tripleShot)}s`, 14, hudY);
     hudY += 20;
   }
-  if (ship.shield > 0)
+  if (ship.shield > 0) {
     ctx.fillText(`ESCUDO ${Math.ceil(ship.shield)}s`, 14, hudY);
+    hudY += 20;
+  }
+  if (slowMo > 0)
+    ctx.fillText(`LENTO ${Math.ceil(slowMo)}s`, 14, hudY);
 
   for (let i = 0; i < lives; i++)
     drawLifeIcon(W - 16 - i * 22, 18);
