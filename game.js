@@ -286,11 +286,11 @@ const HYPER_FACTOR    = 2.5;  // multiplicador de empuje (sube aceleración y ve
 const NOVA_CHANCE     = 0.02; // probabilidad (aparte) de drop de Bomba Nova
 const NOVA_FX_DURATION = 0.6; // segundos del anillo/flash de la explosión
 const POWERUP_STYLE   = {
-  triple: { color: '#0ff', label: '3' },
-  shield: { color: '#4af', label: 'S' },
-  slow:   { color: '#c8f', label: 'L' },
-  hyper:  { color: '#fe4', label: 'H' },
-  nova:   { color: '#f80', label: 'N' },
+  triple: { color: '#0ff', label: '3', sides: 3 }, // triángulo
+  shield: { color: '#4af', label: 'S', sides: 6 }, // hexágono
+  slow:   { color: '#c8f', label: 'L', sides: 4 }, // rombo
+  hyper:  { color: '#fe4', label: 'H', sides: 5 }, // pentágono
+  nova:   { color: '#f80', label: 'N', sides: 8 }, // octágono
 };
 
 class PowerUp {
@@ -303,10 +303,12 @@ class PowerUp {
     this.radius = 10;
     this.type = type;
     this.ttl  = 8;
+    this.rot  = 0;
     this.dead = false;
   }
 
   update(dt) {
+    this.rot += dt;
     this.x = wrap(this.x + this.vx * dt, W);
     this.y = wrap(this.y + this.vy * dt, H);
     this.ttl -= dt;
@@ -316,16 +318,25 @@ class PowerUp {
   draw() {
     // Parpadeo en los últimos 2s
     if (this.ttl < 2 && Math.floor(this.ttl * 8) % 2 === 0) return;
-    const { color, label } = POWERUP_STYLE[this.type];
+    const { color, label, sides } = POWERUP_STYLE[this.type];
     ctx.strokeStyle = color;
     ctx.fillStyle   = color;
     ctx.lineWidth   = 1.5;
+    // Parpadeo suave constante
+    ctx.globalAlpha = 0.65 + 0.35 * Math.sin(this.ttl * 8);
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    for (let i = 0; i < sides; i++) {
+      const a = this.rot + (i / sides) * Math.PI * 2;
+      const px = this.x + Math.cos(a) * this.radius * 1.2;
+      const py = this.y + Math.sin(a) * this.radius * 1.2;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.closePath();
     ctx.stroke();
     ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(label, this.x, this.y + 4.5);
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -615,14 +626,20 @@ function draw() {
 
 // ── Loop principal ────────────────────────────────────────────────────────────
 let lastTime = null;
+let paused   = false;
 
 function loop(ts) {
   const dt = lastTime === null ? 0 : Math.min((ts - lastTime) / 1000, 0.05);
   lastTime = ts;
-  update(dt);
+  if ((pressed('KeyP') || pressed('Escape')) && state !== 'gameover') paused = !paused;
+  if (!paused) update(dt);
   draw();
+  if (paused) drawOverlay('PAUSA', 'P O ESC PARA REANUDAR');
   requestAnimationFrame(loop);
 }
+
+// Pausa automática al perder el foco
+window.addEventListener('blur', () => { if (state !== 'gameover') paused = true; });
 
 initGame();
 requestAnimationFrame(loop);
