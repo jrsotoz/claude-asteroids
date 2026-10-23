@@ -139,6 +139,7 @@ class Ship {
   constructor() {
     this.tripleShot = 0;   // segundos restantes de disparo triple
     this.shield     = 0;   // segundos restantes de escudo
+    this.hyper      = 0;   // segundos restantes de hiperpropulsión
     this.reset();
   }
 
@@ -161,9 +162,10 @@ class Ship {
     if (this.shootCooldown > 0) this.shootCooldown -= dt;
     if (this.tripleShot    > 0) this.tripleShot    -= dt;
     if (this.shield        > 0) this.shield        -= dt;
+    if (this.hyper         > 0) this.hyper         -= dt;
 
-    const ROT   = 3.5;   // rad/s
-    const THRUST = 260;  // px/s²
+    const ROT   = this.hyper > 0 ? 3.5 * 1.3 : 3.5;   // rad/s
+    const THRUST = this.hyper > 0 ? 260 * HYPER_FACTOR : 260;  // px/s²
     const DRAG   = 0.987;
 
     if (keys['ArrowLeft'])  this.angle -= ROT * dt;
@@ -279,17 +281,20 @@ const SHIELD_DURATION = 7;   // segundos de escudo (o hasta absorber un golpe)
 const SHIELD_RADIUS   = 24;
 const SLOW_DURATION   = 6;    // segundos de cámara lenta para los asteroides
 const SLOW_FACTOR     = 0.5;  // fracción de velocidad de los asteroides
+const HYPER_DURATION  = 8;    // segundos de hiperpropulsión
+const HYPER_FACTOR    = 2.5;  // multiplicador de empuje (sube aceleración y vel. máxima)
 const NOVA_CHANCE     = 0.02; // probabilidad (aparte) de drop de Bomba Nova
 const NOVA_FX_DURATION = 0.6; // segundos del anillo/flash de la explosión
 const POWERUP_STYLE   = {
   triple: { color: '#0ff', label: '3' },
   shield: { color: '#4af', label: 'S' },
   slow:   { color: '#c8f', label: 'L' },
+  hyper:  { color: '#fe4', label: 'H' },
   nova:   { color: '#f80', label: 'N' },
 };
 
 class PowerUp {
-  constructor(x, y, type = ['triple', 'shield', 'slow'][randInt(0, 2)]) {
+  constructor(x, y, type = ['triple', 'shield', 'slow', 'hyper'][randInt(0, 3)]) {
     this.x = x;
     this.y = y;
     const angle = rand(0, Math.PI * 2);
@@ -415,6 +420,7 @@ function killShip() {
   ship.dead = true;
   ship.tripleShot = 0;
   ship.shield = 0;
+  ship.hyper = 0;
   slowMo = 0;
   lives--;
   if (lives <= 0) {
@@ -485,6 +491,7 @@ function update(dt) {
     if (dist(ship, p) < ship.radius + p.radius) {
       p.dead = true;
       if (p.type === 'shield') ship.shield = SHIELD_DURATION;
+      else if (p.type === 'hyper') ship.hyper = HYPER_DURATION;
       else if (p.type === 'slow') slowMo = SLOW_DURATION;
       else if (p.type === 'nova') novaBombs = 1;
       else ship.tripleShot = TRIPLE_DURATION;
@@ -550,6 +557,10 @@ function drawHUD() {
   }
   if (ship.shield > 0) {
     ctx.fillText(`ESCUDO ${Math.ceil(ship.shield)}s`, 14, hudY);
+    hudY += 20;
+  }
+  if (ship.hyper > 0) {
+    ctx.fillText(`HIPER ${Math.ceil(ship.hyper)}s`, 14, hudY);
     hudY += 20;
   }
   if (slowMo > 0) {
